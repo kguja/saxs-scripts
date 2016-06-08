@@ -1,0 +1,76 @@
+#!/bin/bash
+# print help message if no arg or -h arg
+if [[ "$1" == "" || "$1" == "-h" ]]
+	
+then
+	echo ' '
+	echo '############################ X9 MAKE MODELS ################################'
+	echo ' '
+	echo 'Script for automated processing and model building from SAXS data at the'
+	echo 'beamline.  NOTE: Results are preliminary and this script is still being'
+	echo 'tested. Comments or suggestions should be sent to: kip@pharm.stonybrook.edu'
+	echo ' '
+	echo 'USAGE: x9makemodels.sh <example.dat> <method> <number_amino_acids>'
+	echo ' '
+	echo 'EXAMPLES:  x9makemodels.sh lyso.dat dammin'
+	echo '           x9makemodels.sh lyso.dat dammif'
+	echo '           x9makemodels.sh lyso.dat gasbor 129'
+	echo ' '
+	echo '###########################################################################'
+	echo ' '
+	exit
+fi
+# proceed if both args given
+if [[ $1 && $2 ]] 
+then
+	#parse autorg output to get reciprocal space rg estimate
+	echo "autorg $1 -f ssv | cut -d' '  -f 1" | bash > reciprocalrg.txt
+	reciprocalrg=`cat reciprocalrg.txt`
+	wait
+	rm reciprocalrg.txt
+	#echo $reciprocalrg
+	#parse autorg again, now to get starting point of guiner region
+	echo "autorg $1 -f ssv | cut -d' ' -f 5" | bash > startpointguiner.txt
+	startpointguiner=`cat startpointguiner.txt`
+	wait
+	rm startpointguiner.txt
+	#set crop data point to start of guinier region minus one
+	startpointcropdata=$(( startpointguiner -1 ))
+	wait
+	#echo $startpointcropdata
+	#crop the data
+	echo "datcrop $1 --skip $startpointcropdata --smax 0.2 -o cropped.dat" | bash
+	wait
+	#run autognom on the cropped data
+	echo "datgnom cropped.dat -r $reciprocalrg -s 0 -o cropped.out" | bash
+	wait
+	if [[ "$2" == "dammin" ]]
+	then
+		#run dammin on autognom output
+		for i in {1..3}
+	do
+		echo "dammin cropped.out /lo dammin1 /mo Fast" | bash
+		wait
+	done
+	elif [[ "$2" == "dammif" ]]
+	then
+		#run dammif on autognom output
+		for i in {1..3}
+	do
+		echo "dammif --prefix=dammif$i --mode=fast cropped.out" | bash
+		wait
+		#echo "pymol dammif$i-1.pdb &" | bash
+	done
+		#mkdir damaver
+		#cd damaver
+		#cp ../dammif*-1.pdb .
+		#echo "damaver -a" | bash
+		wait
+		#echo "supcomb --superposition=all enantiomorphs=yes 2LYZ.pdb damfilt.pdb" | bash
+		wait
+		#echo "pymol 2LYZ.pdb damfilt.pdb &" | bash
+		#cd ..
+	else
+		exit
+	fi
+fi
